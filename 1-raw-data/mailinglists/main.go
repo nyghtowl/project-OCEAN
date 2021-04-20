@@ -98,9 +98,10 @@ func main() {
 
 	//Build run to load mailing list data
 	if *buildListRun {
-		now := time.Now()
+
 		//Set variables in build that aren't coming in on command line
 		groupName := ""
+		now := time.Now()
 
 		// Run Build to test with only mailman python announce list
 		if !*allListRun {
@@ -122,6 +123,7 @@ func main() {
 			}
 			return
 		}
+
 		log.Printf("Build all lists ")
 
 		for subName, origStartDate := range mailListSubDirMap {
@@ -161,32 +163,33 @@ func main() {
 				}
 			}
 		}
-	} else { //Manual run pulls variables from command line to load mailinglist group data
-		log.Printf("Command line / non build mailinglist group run")
+		return
+	}
 
-		if startDateResult, endDateResult, err = utils.FixDate(*startDate, *endDate); err != nil {
-			log.Fatalf("Date error: %v", err)
-		}
+	log.Printf("Command line / non build mailinglist group run")
+
+	if startDateResult, endDateResult, err = utils.FixDate(*startDate, *endDate); err != nil {
+		log.Fatalf("Date error: %v", err)
+	}
+	if *subDirectory != "" {
+		subDirNames = strings.Split(*subDirectory, " ")
+	}
+
+	for idx, groupName := range strings.Split(*groupNames, " ") {
+		//Apply sub directory name to storageConn if it exists
 		if *subDirectory != "" {
-			subDirNames = strings.Split(*subDirectory, " ")
+			conn.SubDirectory = subDirNames[idx]
 		}
 
-		for idx, groupName := range strings.Split(*groupNames, " ") {
-			//Apply sub directory name to storageConn if it exists
-			if *subDirectory != "" {
-				conn.SubDirectory = subDirNames[idx]
-			}
+		if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
+			log.Fatalf("Checking fileName exists error: %v", err)
+		}
 
-			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
-				log.Fatalf("Checking fileName exists error: %v", err)
-			}
-
-			if !fileExists && startDateResult < endDateResult {
-				log.Printf("Working on mailinglist group: %s", groupName)
-				//Get mailinglist data and store
-				if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
-					log.Fatalf("error: %v", err)
-				}
+		if !fileExists && startDateResult < endDateResult {
+			log.Printf("Working on mailinglist group: %s", groupName)
+			//Get mailinglist data and store
+			if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+				log.Fatalf("error: %v", err)
 			}
 		}
 	}
