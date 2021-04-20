@@ -132,17 +132,15 @@ func main() {
 				// Set end date to 1st of current month
 				*endDate = utils.ChangeFirstMonth(now).Format("2006-01-02")
 
+				if *lastMonthRun {
+					*numMonths = 1
+				}
+
 				// Run Build to load all dates for all mailing lists
 				if *allDateRun {
 					//Load all data from all mailing list group dates
 					//Set start and end dates with first mailing list date and current end date
 					if startDateResult, endDateResult, err = utils.FixDate(origStartDate, *endDate); err != nil {
-						log.Fatalf("Date error: %v", err)
-					}
-				} else if *lastMonthRun { // Run Build to load most current month for all mailing lists
-					*numMonths = 1
-					//Set start and end dates split by one month
-					if startDateResult, endDateResult, err = utils.SplitDatesByMonth(*startDate, *endDate, *numMonths); err != nil {
 						log.Fatalf("Date error: %v", err)
 					}
 				} else { //Set start and end dates split by limited number of months
