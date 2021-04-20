@@ -121,44 +121,43 @@ func main() {
 				}
 			}
 			return
-		} else { // Run Build to load all mailinglist groups
-			log.Printf("Build all lists ")
+		}
+		log.Printf("Build all lists ")
 
-			for subName, origStartDate := range mailListSubDirMap {
-				conn.SubDirectory = subName
-				*mailingList = strings.SplitN(subName, "-", 2)[0]
-				groupName = strings.SplitN(subName, "-", 2)[1]
-				// Set end date to 1st of current month
-				*endDate = utils.ChangeFirstMonth(now).Format("2006-01-02")
+		for subName, origStartDate := range mailListSubDirMap {
+			conn.SubDirectory = subName
+			*mailingList = strings.SplitN(subName, "-", 2)[0]
+			groupName = strings.SplitN(subName, "-", 2)[1]
+			// Set end date to 1st of current month
+			*endDate = utils.ChangeFirstMonth(now).Format("2006-01-02")
 
-				if *lastMonthRun {
-					*months = 1
+			if *lastMonthRun {
+				*months = 1
+			}
+
+			// Run Build to load all dates for all mailing lists
+			if *allDateRun {
+				//Load all data from all mailing list group dates
+				//Set start and end dates with first mailing list date and current end date
+				if startDateResult, endDateResult, err = utils.FixDate(origStartDate, *endDate); err != nil {
+					log.Fatalf("Date error: %v", err)
 				}
-
-				// Run Build to load all dates for all mailing lists
-				if *allDateRun {
-					//Load all data from all mailing list group dates
-					//Set start and end dates with first mailing list date and current end date
-					if startDateResult, endDateResult, err = utils.FixDate(origStartDate, *endDate); err != nil {
-						log.Fatalf("Date error: %v", err)
-					}
-				} else { //Set start and end dates split by limited number of months
-					if startDateResult, endDateResult, err = utils.SplitDatesByMonth(*startDate, *endDate, *months); err != nil {
-						log.Fatalf("Date error: %v", err)
-					}
+			} else { //Set start and end dates split by limited number of months
+				if startDateResult, endDateResult, err = utils.SplitDatesByMonth(*startDate, *endDate, *months); err != nil {
+					log.Fatalf("Date error: %v", err)
 				}
+			}
 
-				if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
-					log.Fatalf("Checking fileName exists error: %v", err)
-				}
+			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
+				log.Fatalf("Checking fileName exists error: %v", err)
+			}
 
-				if !fileExists && startDateResult < endDateResult {
-					log.Printf("CALLING GET DATA")
-					log.Printf("Working on mailinglist group: %s", groupName)
-					//Get mailinglist data and store
-					if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
-						log.Fatalf("error: %v", err)
-					}
+			if !fileExists && startDateResult < endDateResult {
+				log.Printf("CALLING GET DATA")
+				log.Printf("Working on mailinglist group: %s", groupName)
+				//Get mailinglist data and store
+				if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+					log.Fatalf("error: %v", err)
 				}
 			}
 		}
