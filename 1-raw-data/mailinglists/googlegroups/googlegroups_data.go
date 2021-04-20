@@ -48,6 +48,10 @@ https://groups.google.com/forum/feed/[GROUP NAME]/topics/rss.xml?num=50
 
 Note Ajax crawling and escaped_fragment is deprecated and this will need to be revised to align to current approaches
 
+Currently, it grabs all topics before assessing dates or it takes a percentage of them which is a hacky workaround. Better design is to look at date on topic page before grabbing message details.
+
+ERRORS - This will hang and lock if workerNum is set to 1. Set it to at least 20 but beware connection reset by peer errors.
+
 */
 
 package googlegroups
@@ -69,8 +73,6 @@ import (
 	"github.com/google/project-OCEAN/1-raw-data/gcs"
 	"github.com/google/project-OCEAN/1-raw-data/utils"
 )
-
-// TODO setup so can pull specific dates
 
 type urlResults struct {
 	urlMap map[string][]string
@@ -258,16 +260,15 @@ func getRawMsgURLWorker(org, groupName string, startDateTime, endDateTime time.T
 		//Combine all raw msg urls results if there are more than one topicURL page reviewed
 		for fileName, rawMsgURL := range tmpResults {
 			topicResults[fileName] = append(topicResults[fileName], rawMsgURL...)
-			log.Printf("%d filename results grabbed for file: %s.", len(rawMsgURL), fileName)
+			//log.Printf("%d filename results grabbed for file, %s, from googlegroup mailinglist: %s.", len(rawMsgURL), fileName, groupName)
 		}
-
 	}
 	results <- urlResults{urlMap: topicResults, err: nil}
 	return
 }
 
 // Goroutine setup to get/consolidate list of raw message urls by year-month text filename for pages with lists of topic urls.
-func listRawMsgURLsByMonth(org, groupName string, startDateTime, endDateTime time.Time, worker int, httpToDom utils.HttpDomResponse, topicToMsgMap TopicIDToRawMsgUrlMap) (rawMsgUrlMap map[string][]string, err error) {
+func listRawMsgURLsByMonth(org, groupName string, startDateTime, endDateTime time.Time, worker int, httpToDom utils.HttpDomResponse, topicToMsgMap TopicIDToRawMsgUrlMap, allDateRun bool) (rawMsgUrlMap map[string][]string, err error) {
 	var (
 		urlTopicList                        string
 		pageIndex, countMsgs, totalMessages int
@@ -286,6 +287,12 @@ func listRawMsgURLsByMonth(org, groupName string, startDateTime, endDateTime tim
 	}
 
 	totalMessages = getTotalTopics(dom)
+
+	// TODO find a better way to avoid pulling all data. Hit connection reset by peer error that inspired this
+	if !allDateRun {
+		totalMessages = int(float64(totalMessages) * .07)
+		log.Printf("Googlegroups message total review limited to %d because getting a limited duration.", totalMessages)
+	}
 
 	// Lower worker # if its greater than totalMessages / 100 or % 100
 	if totalMessages >= 100 {
@@ -326,7 +333,7 @@ func listRawMsgURLsByMonth(org, groupName string, startDateTime, endDateTime tim
 		for fileName, rawMsgURL := range rawMsgURLListOutput.urlMap {
 			rawMsgUrlMap[fileName] = append(rawMsgUrlMap[fileName], rawMsgURL...)
 			countMsgs = countMsgs + len(rawMsgURL)
-			log.Printf("Worker %d result in final: %d filename results grabbed for file: %s.", i, len(rawMsgURL), fileName)
+			//log.Printf("Worker %d result in final: %d filename results grabbed for file: %s.", i, len(rawMsgURL), fileName)
 		}
 	}
 
@@ -334,9 +341,8 @@ func listRawMsgURLsByMonth(org, groupName string, startDateTime, endDateTime tim
 		log.Printf("All topics captured: total topics captured are %d.", totalMessages)
 
 	} else {
-		//log.Printf("Failed to capture all: total topics are %d but only %d were captured.", totalMessages, countMsgs)
-		err = fmt.Errorf("%w failed to capture all: total topics are %d but only %d were captured.", topicCaptureErr, totalMessages, countMsgs)
-		return
+		//Warns but does not throw an error because it may run a full data load or a partial load based on restricted start and end date.
+		log.Printf("NOTE: %d topics captured out of %d total topics. If running a load of all topics this is an error; otherwise, probably limited by a shorter timespan being captured.", countMsgs, totalMessages)
 	}
 	return
 }
@@ -362,9 +368,7 @@ func storeTextWorker(ctx context.Context, storage gcs.Connection, httpToString u
 			}
 			textStore = textStore + "/n" + response + "\n" + fmt.Sprintf("original_url: %s", msgURL) + "\n"
 		}
-		if urls.fileName != "" {
-			log.Printf("Storing %s", urls.fileName)
-		} else {
+		if urls.fileName == "" {
 			results <- fmt.Errorf("URL map filename threw an error: %w", emptyFileNameErr)
 			return
 		}
@@ -405,13 +409,11 @@ func storeRawMsgByMonth(ctx context.Context, storage gcs.Connection, worker int,
 			return
 		}
 	}
-
-	log.Printf("Storage complete.")
 	return
 }
 
 // Main function to run the script
-func GetGoogleGroupsData(ctx context.Context, org, groupName, startDateString, endDateString string, storage gcs.Connection, workerNum int) (err error) {
+func GetGoogleGroupsData(ctx context.Context, org, groupName, startDateString, endDateString string, storage gcs.Connection, workerNum int, allDateRun bool) (err error) {
 
 	var (
 		messageURLResults          map[string][]string
@@ -423,6 +425,7 @@ func GetGoogleGroupsData(ctx context.Context, org, groupName, startDateString, e
 	httpToDom = utils.DomResponse
 	httpToString = utils.StringResponse
 	topicToMsgMap = topicIDToRawMsgUrlMap
+	log.Printf("GOOGLEGROUPS loading")
 
 	// Setup start and end date times to limit what is loaded
 	if startDateTime, err = utils.GetDateTimeType(startDateString); err != nil {
@@ -432,7 +435,7 @@ func GetGoogleGroupsData(ctx context.Context, org, groupName, startDateString, e
 		return fmt.Errorf("end date: %v", err)
 	}
 
-	if messageURLResults, err = listRawMsgURLsByMonth(org, groupName, startDateTime, endDateTime, workerNum, httpToDom, topicToMsgMap); err != nil {
+	if messageURLResults, err = listRawMsgURLsByMonth(org, groupName, startDateTime, endDateTime, workerNum, httpToDom, topicToMsgMap, allDateRun); err != nil {
 		return
 	}
 

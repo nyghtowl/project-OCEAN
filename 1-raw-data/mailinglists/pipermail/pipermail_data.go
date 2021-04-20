@@ -20,7 +20,6 @@ package pipermail
 
 //TODO
 // Add test of the specific page format expected and how to parse it
-// Check the most recent file stored and pull only what isn't there
 
 import (
 	"context"
@@ -51,6 +50,7 @@ func changeMonthToDigit(fileName string) (newName string, fileDate time.Time) {
 // Get, parse and store Pipermail data in GCS.
 func GetPipermailData(ctx context.Context, storage gcs.Connection, groupName, startDateString, endDateString string, httpToDom utils.HttpDomResponse) (storeErr error) {
 	mailingListURL := fmt.Sprintf("https://mail.python.org/pipermail/%s/", groupName)
+	log.Printf("PIPERMAIL loading")
 
 	var (
 		dom                        *goquery.Document
@@ -82,38 +82,13 @@ func GetPipermailData(ctx context.Context, storage gcs.Connection, groupName, st
 							// Each func interface doesn't allow passing errors?
 							storeErr = fmt.Errorf("%w: %v", StorageErr, err)
 						}
-					} else {
-						log.Printf("File %s not stored because date %s outside timespan %s - %s", filename, fileDate, startDateString, endDateString)
 					}
-
 				}
 			}
 		}
 	})
 	return storeErr
 }
-
-// TODO create func to create map of what is in bucket and then compare to what is pulled from site so only pull new files
-//func getLatestFile(setup Setup){
-//	ctx, cancel := context.WithTimeout(ctx, time.Second*10)
-//	defer cancel()
-//
-//	it := client.Bucket(bucket).Objects(ctx, &storage.Query{
-//		Prefix:    prefix,
-//		Delimiter: delim,
-//	})
-//	for {
-//		attrs, err := it.Next()
-//		if err == iterator.Done {
-//			break
-//		}
-//		if err != nil {
-//			return fmt.Errorf("Bucket(%q).Objects(): %v", bucket, err)
-//		}
-//		log.Fprintln(w, attrs.Name)
-//		setup.latestFile = attrs.Name
-//	}
-//}
 
 func main() {
 }

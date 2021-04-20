@@ -32,7 +32,8 @@ var (
 	splitMonthErr  = fmt.Errorf("split month")
 )
 
-// Func pointer to create HTTP response body and return as a string
+//TODO - retry load if it fails
+//Func pointer to create HTTP response body and return as a string
 type HttpStringResponse func(string) (string, error)
 
 // Create HTTP response body and return as a string
@@ -85,6 +86,34 @@ func DomResponse(url string) (dom *goquery.Document, err error) {
 	return
 }
 
+//Add subdirectory and date to filename
+func CreateFileName(mailingList, groupName, date string) (newFileName string, err error) {
+	var (
+		subDirFinal, fileType string
+		fileDate              time.Time
+	)
+
+	switch mailingList {
+	case "gg":
+		fileType = "txt"
+	case "mailman":
+		fileType = "mbox.gz"
+	case "pipermail":
+		fileType = "txt.gz"
+	}
+
+	subDirFinal = fmt.Sprintf("%s-%s", mailingList, groupName)
+
+	if fileDate, err = GetDateTimeType(date); err != nil {
+		err = fmt.Errorf("start date: %v", err)
+	}
+
+	newFileName = fmt.Sprintf("%s/%04d-%02d-%s.%s", subDirFinal, fileDate.Year(), int(fileDate.Month()), subDirFinal, fileType)
+
+	log.Printf("Final filename %s ", newFileName)
+	return
+}
+
 // Convert date string to time type
 func GetDateTimeType(dateString string) (dateTime time.Time, err error) {
 	if dateTime, err = time.Parse("2006-01-02", dateString); err != nil {
@@ -103,6 +132,7 @@ func FixDate(startDate, endDate string) (startDateResult, endDateResult string, 
 	var startDateTime, endDateTime time.Time
 	currentDate := time.Now()
 
+	//log.Printf("START & END DATES", startDate, endDate)
 	//If empty start date, make it the current date minus 1 day so it doesn't equal end date
 	if startDate == "" {
 		startDateTime = currentDate.AddDate(0, 0, -1)
@@ -131,10 +161,16 @@ func FixDate(startDate, endDate string) (startDateResult, endDateResult string, 
 		endDateResult = endDateTime.Format("2006-01-02")
 	}
 
+	if startDateResult == endDateResult {
+		if startDateResult, endDateResult, err = SplitDatesByMonth(startDateResult, endDateResult, 1); err != nil {
+			err = fmt.Errorf("%w start date %v and end date %v are not able to be fixed to 1 month split.", dateFixErr, startDate, endDate)
+		}
+		log.Printf("startDate, %s, changed to 1 month before endDate, %s because they were equal. Change startDate if you want something different.", startDateResult, endDateResult)
+	}
+
 	if startDateTime.After(endDateTime) {
 		err = fmt.Errorf("%w start date %v was past end date %v. Update input with different start date.", dateFixErr, startDate, endDate)
 	}
-
 	// Return start dates and end date strings passed in that aren't empty and start is before end
 	return
 }
@@ -143,8 +179,29 @@ func FixDate(startDate, endDate string) (startDateResult, endDateResult string, 
 func ChangeFirstMonth(dateTime time.Time) (dateTimeResult time.Time) {
 	if dateTime.Day() > 1 {
 		dateTimeResult = dateTime.AddDate(0, 0, -dateTime.Day()+1)
+		//dateTimeResult = time.Date(dateTime.Year(), dateTime.Month(), 1, 0, 0, 0, 0, time.UTC)
 	} else {
 		dateTimeResult = dateTime
+	}
+	return
+}
+
+//Add month workaround for AddDate normalizing that causes behavior like adding a month to end of Jan to point to March.
+func AddMonth(date time.Time) (dateResult time.Time) {
+	// Add a month which pushes to the start of a month after what you want
+	month := int(date.Month())
+	dateTemp := ChangeFirstMonth(date)
+	switch month {
+	case 1, 3, 5, 7, 8, 10, 12:
+		dateResult = dateTemp.AddDate(0, 0, 31)
+	case 2:
+		dateResult = dateTemp.AddDate(0, 0, 30)
+		dateResult = time.Date(dateResult.Year(), dateResult.Month(), 0, 0, 0, 0, 0, time.UTC)
+	default:
+		dateResult = dateTemp.AddDate(0, 1, 0)
+	}
+	if date.Day() > 1 {
+		dateResult.AddDate(0, 0, date.Day()-1)
 	}
 	return
 }
@@ -164,6 +221,7 @@ func SplitDatesByMonth(startDate, endDate string, numMonths int) (startDateResul
 	if startDateTime, err = GetDateTimeType(startDate); err != nil {
 		err = fmt.Errorf("start date: %v", err)
 	}
+
 	// Change start date to the 1st of the month
 	startDateTime = ChangeFirstMonth(startDateTime)
 
@@ -174,23 +232,20 @@ func SplitDatesByMonth(startDate, endDate string, numMonths int) (startDateResul
 
 	if endDateTime.After(currentDate) {
 		//Set end date to current date if end date is after current date
-		endDateTime = currentDate
+		endDateTime = ChangeFirstMonth(currentDate)
 	} else if endDateTime.Day() > 1 && currentDate.After(endDateTime) {
 		//If end date past the first of the month and not in current month, set to the start of next month.
-		endDateTime = endDateTime.AddDate(0, 1, 0)
+		log.Printf("End date after 1st of month and not the current date so it is moved to the following month.")
+		endDateTime = ChangeFirstMonth(AddMonth(endDateTime))
 	}
-	// Change start date to the 1st of the month
-	endDateTime = ChangeFirstMonth(endDateTime)
 
-	// Check that start and end are separated by number of months and adjust if needed assuming end date as origin to compare to
+	// Check that start and end are separated by number of months
 	if int(endDateTime.Month()-startDateTime.Month()) != numMonths {
-		log.Printf("End dates is set to the first date of the following month if there is a following month and end date day is past the 1st. Start date adjusted from end date to create number of months captured. If you want different dates, enter an end date close to what you are targeting.")
-
 		startDateTime = endDateTime.AddDate(0, -numMonths, 0)
+		log.Printf("startDate, %s, changed to num months before endDate, %s. Change endDate if you want something different.", startDateTime.String(), endDateTime.String())
 	}
 
 	startDateResult = startDateTime.Format("2006-01-02")
 	endDateResult = endDateTime.Format("2006-01-02")
-
 	return
 }

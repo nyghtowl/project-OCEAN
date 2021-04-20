@@ -21,6 +21,55 @@ import (
 	"time"
 )
 
+func TestCreateFileName(t *testing.T) {
+	tests := []struct {
+		comparisonType string
+		mailingList    string
+		groupName      string
+		date           string
+		wantName       string
+		wantErr        error
+	}{
+		{
+			comparisonType: "Test googlegroups name created.",
+			mailingList:    "gg",
+			groupName:      "lead",
+			date:           "1888-07-31",
+			wantName:       "gg-lead/1888-07-gg-lead.txt",
+			wantErr:        nil,
+		},
+		{
+			comparisonType: "Test mailman name created.",
+			mailingList:    "mailmain",
+			groupName:      "LaDuke",
+			date:           "2021-01-02",
+			wantName:       "mailmain-LaDuke/2021-02-mailmain-LaDuke.mbox.gz",
+			wantErr:        nil,
+		},
+		{
+			comparisonType: "Test pipermail name created.",
+			mailingList:    "pipermail",
+			groupName:      "environmentalist",
+			date:           "1989-08-07",
+			wantName:       "pipermail-environmentalist/1989-08-pipermail-environmentalist.txt.gz",
+			wantErr:        nil,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.comparisonType, func(t *testing.T) {
+			if gotName, gotErr := CreateFileName(test.mailingList, test.groupName, test.date); !errors.Is(gotErr, test.wantErr) {
+				if !strings.Contains(gotErr.Error(), test.wantErr.Error()) {
+					t.Errorf("CreateFileName response does not match.\n got: %v\nwant: %v", gotErr, test.wantErr)
+				}
+				if strings.Compare(test.wantName, gotName) != 0 {
+					t.Errorf("Failed creating filename. Got: %v and wanted: %v.", gotName, test.wantName)
+				}
+			}
+		})
+	}
+}
+
 func TestFixDates(t *testing.T) {
 	// Test passing in empty start, empty date, same date, start older than end, not a string
 	currentDate := time.Now()
@@ -154,29 +203,56 @@ func TestSplitDatesByMonth(t *testing.T) {
 		},
 		{
 			comparisonType: "End date after today if start of month",
-			start:          "2020-09-01",
-			end:            "3020-09-01",
+			start:          "2020-10-01",
+			end:            "3020-10-01",
 			numMonths:      1,
-			wantStart:      currentDate.AddDate(0, -1, 0).Format("2006-01-02"),
-			wantEnd:        currentDate.Format("2006-01-02"),
+			wantStart:      ChangeFirstMonth(currentDate.AddDate(0, -1, 0)).Format("2006-01-02"),
+			wantEnd:        ChangeFirstMonth(currentDate).Format("2006-01-02"),
 			err:            nil,
 		},
 		{
 			comparisonType: "End date after today",
-			start:          "2020-09-01",
-			end:            "3020-09-30",
+			start:          "2020-12-01",
+			end:            "3020-12-30",
 			numMonths:      1,
-			wantStart:      currentDate.AddDate(0, -1, 0).Format("2006-01-02"),
-			wantEnd:        currentDate.Format("2006-01-02"),
+			wantStart:      ChangeFirstMonth(currentDate.AddDate(0, -1, 0)).Format("2006-01-02"),
+			wantEnd:        ChangeFirstMonth(currentDate).Format("2006-01-02"),
 			err:            nil,
 		},
 		{
 			comparisonType: "Check Feb\n",
-			start:          "1865-02-01",
-			end:            "1865-03-18",
+			start:          "2009-01-01",
+			end:            "2009-01-31",
 			numMonths:      1,
-			wantStart:      "1865-03-01",
-			wantEnd:        "1865-04-01",
+			wantStart:      "2009-01-01",
+			wantEnd:        "2009-02-01",
+			err:            nil,
+		},
+		{
+			comparisonType: "Check multi months\n",
+			start:          "2020-02-01",
+			end:            "2020-04-18",
+			numMonths:      3,
+			wantStart:      "2020-02-01",
+			wantEnd:        "2020-05-01",
+			err:            nil,
+		},
+		{
+			comparisonType: "End month earlier than start",
+			start:          "2020-12-01",
+			end:            "2021-01-01",
+			numMonths:      2,
+			wantStart:      "2020-11-01",
+			wantEnd:        "2021-01-01",
+			err:            nil,
+		},
+		{
+			comparisonType: "Split by more than a year",
+			start:          "2020-12-01",
+			end:            "2021-01-01",
+			numMonths:      23,
+			wantStart:      "2019-02-01",
+			wantEnd:        "2021-01-01",
 			err:            nil,
 		},
 	}
