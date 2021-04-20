@@ -45,8 +45,8 @@ var (
 	//Optional variables depending on build or command line setup
 	startDate = flag.String("start-date", "", "Start date in format of year-month-date and 4dig-2dig-2dig.")
 	endDate   = flag.String("end-date", "", "End date in format of year-month-date and 4dig-2dig-2dig.")
-	numMonths = flag.Int("months", 1, "Number of months to cover between start and end dates.")
-	workerNum = flag.Int("workers", 20, "Number of workers to use for goroutines.")
+	months    = flag.Int("months", 1, "Number of months to cover between start and end dates.")
+	workers   = flag.Int("workers", 20, "Number of workers to use for goroutines.")
 
 	//Optional variables and best used with command line
 	subDirectory = flag.String("subdirectory", "", "Subdirectory to store files. Enter 1 or more and use spaces to identify. CAUTION also enter the groupNames to load to in the same order.")
@@ -84,10 +84,7 @@ func main() {
 	//Setup Storage connection
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	conn := gcs.StorageConnection{
-		ProjectID:  *projectID,
-		BucketName: *bucketName,
-	}
+	conn := gcs.StorageConnection{*projectID, *bucketName}
 	if err := conn.ConnectClient(ctx); err != nil {
 		log.Fatalf("Connect GCS failes: %v", err)
 	}
@@ -105,7 +102,6 @@ func main() {
 		// Run Build to test with only mailman python announce list
 		if !*allListRun {
 			log.Printf("Build test run with mailman")
-
 			groupName = "python-announce-list"
 			subDirName := "mailman-python-announce-list"
 			conn.SubDirectory = subDirName
@@ -117,7 +113,7 @@ func main() {
 			}
 			if !fileExists && startDateResult < endDateResult {
 				log.Printf("Working on mailinglist group: %s", groupName)
-				if err := mailman.GetMailmanData(ctx, &conn, groupName, *startDate, *endDate, *numMonths); err != nil {
+				if err := mailman.GetMailmanData(ctx, &conn, groupName, *startDate, *endDate, *months); err != nil {
 					log.Fatalf("Mailman test build load failed: %v", err)
 				}
 			}
@@ -133,7 +129,7 @@ func main() {
 				*endDate = utils.ChangeFirstMonth(now).Format("2006-01-02")
 
 				if *lastMonthRun {
-					*numMonths = 1
+					*months = 1
 				}
 
 				// Run Build to load all dates for all mailing lists
@@ -144,7 +140,7 @@ func main() {
 						log.Fatalf("Date error: %v", err)
 					}
 				} else { //Set start and end dates split by limited number of months
-					if startDateResult, endDateResult, err = utils.SplitDatesByMonth(*startDate, *endDate, *numMonths); err != nil {
+					if startDateResult, endDateResult, err = utils.SplitDatesByMonth(*startDate, *endDate, *months); err != nil {
 						log.Fatalf("Date error: %v", err)
 					}
 				}
@@ -157,7 +153,7 @@ func main() {
 					log.Printf("CALLING GET DATA")
 					log.Printf("Working on mailinglist group: %s", groupName)
 					//Get mailinglist data and store
-					if err := getData(ctx, &conn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+					if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
 						log.Fatalf("error: %v", err)
 					}
 				}
@@ -186,7 +182,7 @@ func main() {
 			if !fileExists && startDateResult < endDateResult {
 				log.Printf("Working on mailinglist group: %s", groupName)
 				//Get mailinglist data and store
-				if err := getData(ctx, &conn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+				if err := getData(ctx, &conn, httpToDom, *workers, *months, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
 					log.Fatalf("error: %v", err)
 				}
 			}
