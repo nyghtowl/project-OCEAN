@@ -84,7 +84,10 @@ func main() {
 	//Setup Storage connection
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	conn := gcs.StorageConnection{*projectID, *bucketName}
+	conn := gcs.StorageConnection{
+		ProjectID:  *projectID,
+		BucketName: *bucketName,
+	}
 	if err := conn.ConnectClient(ctx); err != nil {
 		log.Fatalf("Connect GCS failes: %v", err)
 	}
@@ -190,18 +193,18 @@ func main() {
 	}
 }
 
-func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDomResponse, workers, months int, mailingList, group, start, end string, allDateRun bool) error {
+func getData(ctx context.Context, conn gcs.Connection, resp utils.HttpDomResponse, workers, months int, mailingList, group, start, end string, getAll bool) error {
 	switch mailingList {
 	case "pipermail":
-		if err := pipermail.GetPipermailData(ctx, storage, group, start, end, httpToDom); err != nil {
+		if err := pipermail.GetPipermailData(ctx, conn, group, start, end, resp); err != nil {
 			return fmt.Errorf("Pipermail load failed: %v", err)
 		}
 	case "mailman":
-		if err := mailman.GetMailmanData(ctx, storage, group, start, end, months); err != nil {
+		if err := mailman.GetMailmanData(ctx, conn, group, start, end, months); err != nil {
 			return fmt.Errorf("Mailman load failed: %v", err)
 		}
 	case "gg":
-		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, storage, workers, allDateRun); err != nil {
+		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, conn, workers, getAll); err != nil {
 			return fmt.Errorf("GoogleGroups load failed: %v", err)
 		}
 	default:
