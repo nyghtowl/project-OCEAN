@@ -67,27 +67,6 @@ var (
 		"pipermail-python-list":          "1999-02-01"}
 )
 
-func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDomResponse, workerNum, numMonths int, mailingList, groupName, startDateString, endDateString string) {
-	switch mailingList {
-	//TODO add start and end dates to pipermail
-	case "pipermail":
-		if err := pipermail.GetPipermailData(ctx, storage, groupName, startDateString, endDateString, httpToDom); err != nil {
-			log.Fatalf("Mailman load failed: %v", err)
-		}
-	case "mailman":
-		if err := mailman.GetMailmanData(ctx, storage, groupName, startDateString, endDateString, numMonths); err != nil {
-			log.Fatalf("Mailman load failed: %v", err)
-		}
-		//TODO add start and end dates to google groups
-	case "gg":
-		if err := googlegroups.GetGoogleGroupsData(ctx, "", groupName, startDateString, endDateString, storage, workerNum); err != nil {
-			log.Fatalf("GoogleGroups load failed: %v", err)
-		}
-	default:
-		log.Fatalf("Mailing list %v is not an option. Change the option submitted.", mailingList)
-	}
-}
-
 func main() {
 	var err error
 	numMonths := 1
@@ -168,7 +147,32 @@ func main() {
 			}
 
 			//Get mailing list data and store
-			getData(ctx, &storageConn, httpToDom, *workerNum, numMonths, *mailingList, groupName, *startDate, *endDate)
+			if err := getData(ctx, &storageConn, httpToDom, *workerNum, numMonths, *mailingList, groupName, *startDate, *endDate); err != nil {
+				log.Fatalf("error getting data: %s", err)
+			}
 		}
 	}
+}
+
+func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDomResponse, workers, months int, mailingList, group, start, end string) error {
+	switch mailingList {
+	//TODO add start and end dates to pipermail
+	case "pipermail":
+		if err := pipermail.GetPipermailData(ctx, storage, group, start, end, httpToDom); err != nil {
+			return fmt.Errorf("mailman load failed: %v", err)
+		}
+	case "mailman":
+		if err := mailman.GetMailmanData(ctx, storage, group, start, end, months); err != nil {
+			return fmt.Errorf("mailman load failed: %v", err)
+		}
+		//TODO add start and end dates to google groups
+	case "gg":
+		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, storage, workers); err != nil {
+			return fmt.Errorf("googleGroups load failed: %v", err)
+		}
+	default:
+		return fmt.Errorf("mailing list '%v' is not an option. Change the option submitted.", mailingList)
+	}
+
+	return fmt.Errorf("error selecting mailing list. ")
 }
