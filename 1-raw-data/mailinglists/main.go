@@ -84,15 +84,15 @@ func main() {
 	//Setup Storage connection
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	storageConn := gcs.StorageConnection{
+	conn := gcs.StorageConnection{
 		ProjectID:  *projectID,
 		BucketName: *bucketName,
 	}
-	if err := storageConn.ConnectClient(ctx); err != nil {
+	if err := conn.ConnectClient(ctx); err != nil {
 		log.Fatalf("Connect GCS failes: %v", err)
 	}
 	//Check and create bucket if needed
-	if err := storageConn.CreateBucket(ctx); err != nil {
+	if err := conn.CreateBucket(ctx); err != nil {
 		log.Fatalf("Create GCS Bucket failed: %v", err)
 	}
 
@@ -108,16 +108,16 @@ func main() {
 
 			groupName = "python-announce-list"
 			subDirName := "mailman-python-announce-list"
-			storageConn.SubDirectory = subDirName
+			conn.SubDirectory = subDirName
 			*startDate = now.AddDate(0, -1, 0).Format("2006-01-02")
 			*endDate = now.AddDate(0, -1, 1).Format("2006-01-02")
 
-			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &storageConn); err != nil {
+			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
 				log.Fatalf("Checking fileName exists error: %v", err)
 			}
 			if !fileExists && startDateResult < endDateResult {
 				log.Printf("Working on mailinglist group: %s", groupName)
-				if err := mailman.GetMailmanData(ctx, &storageConn, groupName, *startDate, *endDate, *numMonths); err != nil {
+				if err := mailman.GetMailmanData(ctx, &conn, groupName, *startDate, *endDate, *numMonths); err != nil {
 					log.Fatalf("Mailman test build load failed: %v", err)
 				}
 			}
@@ -126,7 +126,7 @@ func main() {
 			log.Printf("Build all lists ")
 
 			for subName, origStartDate := range mailListSubDirMap {
-				storageConn.SubDirectory = subName
+				conn.SubDirectory = subName
 				*mailingList = strings.SplitN(subName, "-", 2)[0]
 				groupName = strings.SplitN(subName, "-", 2)[1]
 				// Set end date to 1st of current month
@@ -148,7 +148,8 @@ func main() {
 						log.Fatalf("Date error: %v", err)
 					}
 				}
-				if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &storageConn); err != nil {
+
+				if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
 					log.Fatalf("Checking fileName exists error: %v", err)
 				}
 
@@ -156,7 +157,7 @@ func main() {
 					log.Printf("CALLING GET DATA")
 					log.Printf("Working on mailinglist group: %s", groupName)
 					//Get mailinglist data and store
-					if err := getData(ctx, &storageConn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+					if err := getData(ctx, &conn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
 						log.Fatalf("error: %v", err)
 					}
 				}
@@ -175,17 +176,17 @@ func main() {
 		for idx, groupName := range strings.Split(*groupNames, " ") {
 			//Apply sub directory name to storageConn if it exists
 			if *subDirectory != "" {
-				storageConn.SubDirectory = subDirNames[idx]
+				conn.SubDirectory = subDirNames[idx]
 			}
 
-			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &storageConn); err != nil {
+			if fileExists, startDateResult, endDateResult, err = reviewFileNamesAndFixDates(ctx, *mailingList, groupName, startDateResult, endDateResult, &conn); err != nil {
 				log.Fatalf("Checking fileName exists error: %v", err)
 			}
 
 			if !fileExists && startDateResult < endDateResult {
 				log.Printf("Working on mailinglist group: %s", groupName)
 				//Get mailinglist data and store
-				if err := getData(ctx, &storageConn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
+				if err := getData(ctx, &conn, httpToDom, *workerNum, *numMonths, *mailingList, groupName, startDateResult, endDateResult, *allDateRun); err != nil {
 					log.Fatalf("error: %v", err)
 				}
 			}
