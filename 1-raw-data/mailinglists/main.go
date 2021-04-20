@@ -209,8 +209,10 @@ func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDo
 		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, storage, workers, allDateRun); err != nil {
 			return fmt.Errorf("GoogleGroups load failed: %v", err)
 		}
+	default:
+		return fmt.Errorf("Mailing list %v is not an option. Change the option submitted.", mailingList)
 	}
-	return fmt.Errorf("Mailing list %v is not an option. Change the option submitted.", mailingList)
+	return nil
 }
 
 func reviewFileNamesAndFixDates(ctx context.Context, mailingList, groupName, startDate, endDate string, storageConn gcs.Connection) (fileExists bool, startDateResult, endDateResult string, err error) {
