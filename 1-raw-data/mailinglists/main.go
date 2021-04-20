@@ -215,23 +215,25 @@ func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDo
 	return nil
 }
 
-func reviewFileNamesAndFixDates(ctx context.Context, mailingList, groupName, startDate, endDate string, storageConn gcs.Connection) (fileExists bool, startDateResult, endDateResult string, err error) {
+func reviewFileNamesAndFixDates(ctx context.Context, mailingList, groupName, startDate, endDate string, conn gcs.Connection) (bool, string, string, error) {
 
-	fileExists = true
-	startDateResult, endDateResult = startDate, endDate
+	var err error
+	fileExists := true
+	start, end := startDate, endDate
 
-	for startDateResult < endDateResult && fileExists {
+	for start < end && fileExists {
 		//Advance start date if file exists
-		if fileExists, startDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, startDateResult, true, storageConn); err != nil {
-			err = fmt.Errorf("Looping start dates threw an error: %v", err)
+		if fileExists, start, err = createAndCheckFileNames(ctx, mailingList, groupName, start, true, conn); err != nil {
+			return false, "", "", fmt.Errorf("Looping start dates threw an error: %v", err)
 		}
 
 		//Reduce end date if file exists
-		if fileExists, endDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, endDateResult, false, storageConn); err != nil {
-			err = fmt.Errorf("Looping start dates threw an error: %v", err)
+		if fileExists, end, err = createAndCheckFileNames(ctx, mailingList, groupName, end, false, conn); err != nil {
+			return false, "", "", fmt.Errorf("Looping start dates threw an error: %v", err)
 		}
 	}
-	return
+
+	return fileExists, start, end, nil
 }
 
 func createAndCheckFileNames(ctx context.Context, mailingList, groupName, dateToCheck string, forwardDate bool, conn gcs.Connection) (bool, string, error) {
