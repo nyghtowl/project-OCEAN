@@ -72,73 +72,6 @@ var (
 		"pipermail-python-list":          "1999-02-01"}
 )
 
-func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDomResponse, workers, months int, mailingList, group, start, end string, allDateRun bool) error {
-	switch mailingList {
-	case "pipermail":
-		if err := pipermail.GetPipermailData(ctx, storage, group, start, end, httpToDom); err != nil {
-			return fmt.Errorf("Pipermail load failed: %v", err)
-		}
-	case "mailman":
-		if err := mailman.GetMailmanData(ctx, storage, group, start, end, months); err != nil {
-			return fmt.Errorf("Mailman load failed: %v", err)
-		}
-	case "gg":
-		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, storage, workers, allDateRun); err != nil {
-			return fmt.Errorf("GoogleGroups load failed: %v", err)
-		}
-	}
-	return fmt.Errorf("Mailing list %v is not an option. Change the option submitted.", mailingList)
-}
-
-func reviewFileNamesAndFixDates(ctx context.Context, mailingList, groupName, startDate, endDate string, storageConn gcs.Connection) (fileExists bool, startDateResult, endDateResult string, err error) {
-
-	fileExists = true
-	startDateResult, endDateResult = startDate, endDate
-
-	for startDateResult < endDateResult && fileExists {
-		//Advance start date if file exists
-		if fileExists, startDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, startDateResult, true, storageConn); err != nil {
-			err = fmt.Errorf("Looping start dates threw an error: %v", err)
-		}
-
-		//Reduce end date if file exists
-		if fileExists, endDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, endDateResult, false, storageConn); err != nil {
-			err = fmt.Errorf("Looping start dates threw an error: %v", err)
-		}
-	}
-	return
-}
-
-func createAndCheckFileNames(ctx context.Context, mailingList, groupName, dateToCheck string, forwardDate bool, conn gcs.Connection) (bool, string, error) {
-
-	var err error
-	var dateT time.Time
-	dateResult := dateToCheck
-	fileName := ""
-
-	if fileName, err = utils.CreateFileName(mailingList, groupName, dateToCheck); err != nil {
-		return false, dateResult, fmt.Errorf("Filename error: %v", err)
-	}
-
-	//Check if file exists
-	fileExists := conn.CheckFileExists(ctx, fileName)
-
-	//Increase startDate by a month if file exists
-	if fileExists {
-		if dateT, err = utils.GetDateTimeType(dateToCheck); err != nil {
-			return fileExists, dateResult, fmt.Errorf("start date: %v", err)
-		}
-		//Add or subtract a month depending on if start or end
-		if forwardDate {
-			dateResult = utils.AddMonth(dateT).Format("2006-01-02")
-		} else {
-			dateResult = dateT.AddDate(0, -1, 0).Format("2006-01-02")
-		}
-	}
-
-	return fileExists, dateResult, nil
-}
-
 func main() {
 	var (
 		err        error
@@ -260,4 +193,71 @@ func main() {
 			}
 		}
 	}
+}
+
+func getData(ctx context.Context, storage gcs.Connection, httpToDom utils.HttpDomResponse, workers, months int, mailingList, group, start, end string, allDateRun bool) error {
+	switch mailingList {
+	case "pipermail":
+		if err := pipermail.GetPipermailData(ctx, storage, group, start, end, httpToDom); err != nil {
+			return fmt.Errorf("Pipermail load failed: %v", err)
+		}
+	case "mailman":
+		if err := mailman.GetMailmanData(ctx, storage, group, start, end, months); err != nil {
+			return fmt.Errorf("Mailman load failed: %v", err)
+		}
+	case "gg":
+		if err := googlegroups.GetGoogleGroupsData(ctx, "", group, start, end, storage, workers, allDateRun); err != nil {
+			return fmt.Errorf("GoogleGroups load failed: %v", err)
+		}
+	}
+	return fmt.Errorf("Mailing list %v is not an option. Change the option submitted.", mailingList)
+}
+
+func reviewFileNamesAndFixDates(ctx context.Context, mailingList, groupName, startDate, endDate string, storageConn gcs.Connection) (fileExists bool, startDateResult, endDateResult string, err error) {
+
+	fileExists = true
+	startDateResult, endDateResult = startDate, endDate
+
+	for startDateResult < endDateResult && fileExists {
+		//Advance start date if file exists
+		if fileExists, startDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, startDateResult, true, storageConn); err != nil {
+			err = fmt.Errorf("Looping start dates threw an error: %v", err)
+		}
+
+		//Reduce end date if file exists
+		if fileExists, endDateResult, err = createAndCheckFileNames(ctx, mailingList, groupName, endDateResult, false, storageConn); err != nil {
+			err = fmt.Errorf("Looping start dates threw an error: %v", err)
+		}
+	}
+	return
+}
+
+func createAndCheckFileNames(ctx context.Context, mailingList, groupName, dateToCheck string, forwardDate bool, conn gcs.Connection) (bool, string, error) {
+
+	var err error
+	var dateT time.Time
+	dateResult := dateToCheck
+	fileName := ""
+
+	if fileName, err = utils.CreateFileName(mailingList, groupName, dateToCheck); err != nil {
+		return false, dateResult, fmt.Errorf("Filename error: %v", err)
+	}
+
+	//Check if file exists
+	fileExists := conn.CheckFileExists(ctx, fileName)
+
+	//Increase startDate by a month if file exists
+	if fileExists {
+		if dateT, err = utils.GetDateTimeType(dateToCheck); err != nil {
+			return fileExists, dateResult, fmt.Errorf("start date: %v", err)
+		}
+		//Add or subtract a month depending on if start or end
+		if forwardDate {
+			dateResult = utils.AddMonth(dateT).Format("2006-01-02")
+		} else {
+			dateResult = dateT.AddDate(0, -1, 0).Format("2006-01-02")
+		}
+	}
+
+	return fileExists, dateResult, nil
 }
